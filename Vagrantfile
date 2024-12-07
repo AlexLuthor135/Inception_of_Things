@@ -1,0 +1,60 @@
+Vagrant.configure("2") do |config|
+  config.vm.box = "ubuntu/jammy64"
+
+  config.trigger.before :up do |trigger|
+    trigger.info = "Creating ./confs directory if it doesn't exist"
+    trigger.run = { inline: "mkdir -p ./confs" }
+  end
+
+  config.vm.define "dsasS" do |server|
+    server.vm.provider "virtualbox" do |vb|
+      vb.memory = "1024"
+      vb.cpus = "1"
+    end
+    server.vm.hostname = "dsasS"
+    server.vm.network "private_network", ip: "192.168.56.110"
+    server.vm.synced_folder "./confs", "/vagrant_share"
+    server.vm.boot_timeout = 600
+    server.vm.provision "shell", inline: <<-SHELL
+      # Detect the first available network interface that isn't lo (loopback)
+      INTERFACE=$(ip -o -4 addr show | awk '{print $2, $4}' | grep -v 'lo' | awk '{print $1}' | head -n 1)
+      curl -sfL https://get.k3s.io | K3S_KUBECONFIG_MODE="644" INSTALL_K3S_EXEC="--flannel-iface ${INTERFACE}" sh -
+      while [ ! -f /var/lib/rancher/k3s/server/node-token ] || [ ! -f /etc/rancher/k3s/k3s.yaml ]; do
+        echo "Waiting for k3s to generate node-token and k3s.yaml..."
+        sleep 2
+      done
+      cp /var/lib/rancher/k3s/server/node-token /vagrant_share/node-token
+      cp /etc/rancher/k3s/k3s.yaml /vagrant_share/k3s.yaml
+      chmod 644 /vagrant_share/k3s.yaml
+      mkdir -p ~/.kube
+      cp /vagrant_share/k3s.yaml ~/.kube/config
+      chmod 600 ~/.kube/config
+    SHELL
+  end
+
+  config.vm.define "alappasSW" do |worker|
+    worker.vm.provider "virtualbox" do |vb|
+      vb.memory = "1024"
+      vb.cpus = "1"
+    end
+    worker.vm.hostname = "alappasSW"
+    worker.vm.network "private_network", ip: "192.168.56.111"
+    worker.vm.synced_folder "./confs", "/vagrant_share"
+    worker.vm.boot_timeout = 600 
+  
+    worker.vm.provision "shell", inline: <<-SHELL
+      # Wait for the node token to become available
+      while [ ! -f /vagrant_share/node-token ] || [ ! -f /vagrant_share/k3s.yaml ]; do
+        echo "Waiting for node token..."
+        sleep 2
+      done
+      # Detect the first available network interface that isn't lo (loopback)
+      INTERFACE=$(ip -o -4 addr show | awk '{print $2, $4}' | grep -v 'lo' | awk '{print $1}' | head -n 1)
+      # Install K3s as a Worker Node
+      curl -sfL https://get.k3s.io | K3S_KUBECONFIG_MODE="644" INSTALL_K3S_EXEC="--flannel-iface ${INTERFACE}" K3S_URL=https://192.168.56.110:6443 K3S_TOKEN=$(cat /vagrant_share/node-token) sh -
+      mkdir -p ~/.kube
+      cp /vagrant_share/k3s.yaml ~/.kube/config
+      chmod 600 ~/.kube/config
+      SHELL
+  end
+end
