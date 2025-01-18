@@ -2,7 +2,9 @@ apiVersion: networking.k8s.io/v1
 kind: Ingress
 metadata:
   name: app1-ingress
+  namespace: kube-system
 spec:
+  ingressClassName: traefik
   rules:
   - host: app1.com
     http:
