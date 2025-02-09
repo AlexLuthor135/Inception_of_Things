@@ -48,3 +48,14 @@ echo "Development environment set up successfully."
 echo "Setting up DockerHub..."
 bash ./set_dockerhub.sh
 echo "DockerHub set up successfully."
+
+# To expose the service, use this command: kubectl port-forward svc/alappas-service -n dev 8082:80 &
+# To check the version: kubectl get deployment -n dev alappas -o jsonpath='{.spec.template.spec.containers[*].image}'
+
+# Helpers to set up password / login
+# echo "Setting Argo CD admin password..."
+# kubectl -n argocd patch secret argocd-secret \
+#   -p '{"stringData": {"admin.password": ""}}'
+# kubectl delete pod -n argocd -l app.kubernetes.io/name=argocd-server
+# kubectl -n argocd get secret argocd-initial-admin-secret -o jsonpath="{.data.password}" | base64 --decode
+# argocd login $ARGOCD_SERVER --username admin --password $(kubectl -n argocd get secret argocd-initial-admin-secret -o jsonpath="{.data.password}" | base64 --decode) --insecure
